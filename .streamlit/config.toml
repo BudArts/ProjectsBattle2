@@ -1,0 +1,18 @@
+[theme]
+base = "light"
+primaryColor = "#E21A1A"
+backgroundColor = "#F2F2F2"
+secondaryBackgroundColor = "#FFFFFF"
+textColor = "#1D1D1B"
+font = "sans serif"
+
+[server]
+headless = true
+address = "0.0.0.0"
+enableCORS = false
+enableXsrfProtection = false
+runOnSave = true
+fileWatcherType = "poll"
+
+[browser]
+gatherUsageStats = false

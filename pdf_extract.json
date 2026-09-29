@@ -1,0 +1,10 @@
+Traceback (most recent call last):
+  File "C:\Users\Ivan\AppData\Roaming\kimi-desktop\daimon-share\daimon\runtime\kimi-code\home\plugins\managed\kimi-pdf\skills\kimi-pdf\scripts\pdf.py", line 354, in <module>
+    main()
+  File "C:\Users\Ivan\AppData\Roaming\kimi-desktop\daimon-share\daimon\runtime\kimi-code\home\plugins\managed\kimi-pdf\skills\kimi-pdf\scripts\pdf.py", line 348, in main
+    args.func(args)
+  File "C:\Users\Ivan\AppData\Roaming\kimi-desktop\daimon-share\daimon\runtime\kimi-code\home\plugins\managed\kimi-pdf\skills\kimi-pdf\scripts\pdf.py", line 97, in cmd_extract_text
+    from cmd_extract import extract_text
+  File "C:\Users\Ivan\AppData\Roaming\kimi-desktop\daimon-share\daimon\runtime\kimi-code\home\plugins\managed\kimi-pdf\skills\kimi-pdf\scripts\cmd_extract.py", line 5, in <module>
+    import pdfplumber
+ModuleNotFoundError: No module named 'pdfplumber'
