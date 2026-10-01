@@ -24,7 +24,7 @@ python main.py seed            # пересоздать парк в БД
 ## Тесты
 
 ```bash
-python -m pytest tests/ -q     # юнит/интеграционные тесты исправлений
+python -m pytest tests/ -q     # юнит- и интеграционные тесты
 python test_run.py             # сквозной демо-прогон (1 год) + экспорт Excel
 ```
 
@@ -35,11 +35,9 @@ src/core/        конфигурация, модель данных (SQLite), �
 src/planning/    strategic (PuLP, 12 мес) · tactical (OR-Tools CP-SAT, 14 дн) · operational (правила)
 src/simulation/  цифровой двойник (SimPy) — исполняет планы, собирает метрики и ML-выборку
 src/dashboard/   веб-интерфейс (Streamlit): KPI, аналитика, депо, парк, движение, ML
-docs/            анализ (analysis.md), описание продукта (PRODUCT.md), список исправлений (IMPROVEMENTS.md)
+docs/            описание продукта (PRODUCT.md)
 ```
 
 ## Документы
 
-- `docs/PRODUCT.md` — простое описание того, как работает продукт.
-- `docs/IMPROVEMENTS.md` — что было исправлено и подтверждено прогонами (до/после).
-- `docs/analysis.md` — первичный аудит первой версии (исторический).
+- `docs/PRODUCT.md` — описание того, как работает продукт.
