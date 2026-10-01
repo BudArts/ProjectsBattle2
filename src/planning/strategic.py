@@ -5,11 +5,7 @@
 года, планируется отдельным событием (у поезда может быть несколько в году:
 IS510 → IS520 → … → IS540).
 
-Исправлено относительно прежней версии:
-- уникальные имена ограничений PuLP (падал при двух типах ревизий);
-- единая шкала времени (`now` — момент симуляции, не datetime.now());
-- учитывается дата ввода поезда в эксплуатацию;
-- план сохраняется и реально исполняется симулятором (замкнутый контур).
+Время отсчитывается от `now` (момент симуляции), а не от datetime.now().
 """
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional
@@ -34,12 +30,10 @@ class StrategicPlanner:
         self.horizon_months = 12
         # Физический потолок, а не «красивое» число: иначе план невыполним
         # (на поезд приходится до 12 заходов IS510+ в год). Равномерность
-        # даёт целевая функция, а не заниженный лимит.
-        # IS600/IS700 ограничены 3 путями с домкратами.
+        # обеспечивает целевая функция. IS600/IS700 ограничены 3 путями с домкратами.
         self.monthly_capacity = {"IS510": 40, "IS520": 24, "IS530": 16,
                                  "IS540": 8, "IS600": 3, "IS700": 2}
 
-    # ------------------------------------------------------------------ API
     def create_annual_plan(self) -> List[Dict]:
         """Список событий: [{train_id, train_number, service_type, month}]."""
         self.session.expire_all()
@@ -67,7 +61,6 @@ class StrategicPlanner:
                 .filter_by(type="strategic", active=True).first())
         return plan.schedule_data.get("schedule") if plan else None
 
-    # ------------------------------------------------------------- прогноз
     def _forecast_service_needs(self) -> List[Dict]:
         """Ревизии года с учётом иерархии.
 
@@ -125,7 +118,6 @@ class StrategicPlanner:
                         counters[level] = 0.0
         return jobs
 
-    # ---------------------------------------------------------- оптимизация
     def _optimize_distribution(self, jobs: List[Dict]) -> Optional[List[Dict]]:
         model = LpProblem("Strategic_Plan", LpMinimize)
         x = {}
@@ -183,7 +175,6 @@ class StrategicPlanner:
                     break
         return out
 
-    # ---------------------------------------------------------- сохранение
     def _save_plan(self, schedule: List[Dict]):
         self.session.query(Schedule).filter_by(type="strategic", active=True)\
             .update({"active": False})

@@ -28,7 +28,7 @@ def slack_count(commissioned: int) -> int:
 
 
 def service_slot_limit(commissioned: int) -> int:
-    """Жёсткий потолок: и норма готовности, и «не более 5» из чата."""
+    """Жёсткий потолок: норма готовности и ограничение «не более 5 поездов на сервисе»."""
     return max(0, min(config.MAX_ON_SERVICE, slack_count(commissioned)))
 
 
@@ -41,8 +41,8 @@ def lathe_cohort_report(daily_km: float = 2500.0, lathes: int = 1,
                         night_only: bool = True) -> Dict:
     """Первая волна обточки: 6 составов поставлены в один день.
 
-    Заказчик прямо попросил увидеть момент, когда одного тандемного станка
-    перестаёт хватать. Считаем от графика поставки, а не от удачного seed.
+    Показывает, в какой момент одного тандемного станка перестаёт хватать.
+    Расчёт идёт от графика поставки, а не от результата конкретного прогона.
     """
     cars = config.CARS_PER_TRAIN
     hours_per_car = config.TURNING_HOURS_PER_CAR

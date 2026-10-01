@@ -1,6 +1,6 @@
 """Цифровой двойник парка ВСМ. Контур замкнут: план исполняется.
 
-Что взято из чата с заказчиком (АО «Сервис Высоких Скоростей»):
+Условия, заложенные в модель:
 - оборот — пара 679 км × 2, запас резерва 1 493 км, по 2 состава в каждом городе;
 - плановое ТО только в Обухово; в Москве — экипировка и внеплановые работы, включая замену КП;
 - одновременно на сервисе не больше 5 составов; IS600/IS700 — 3 пути с домкратами;
@@ -25,7 +25,8 @@ from src.core.database import (BROKEN, MAINTENANCE, NOT_DELIVERED, OPERATIONAL,
 from src.core.labels import ru_location, ru_node, ru_service, ru_status
 from src.planning.strategic import MONTH_HOURS, StrategicPlanner
 from src.planning.tactical import TacticalPlanner
-from src.simulation.diagram import protected_morning_ids, run_diagram_day
+from src.simulation.diagram import (protected_morning_ids, rebalance_cities,
+                                    run_diagram_day)
 from src.simulation.report import (monthly_load_cv, required_count,
                                    service_slot_limit)
 from src.core.timetable import home_city, timetable_rows
@@ -81,7 +82,6 @@ class IntegratedFleetSimulator:
         self.metrics: Dict = {}
         self._until = 0
 
-    # ============================================================== запуск
     def run(self, duration_hours: int = 8760, seed: int = 42,
             callback: Optional[Callable] = None) -> Dict:
         self.rng = random.Random(seed)
@@ -179,7 +179,7 @@ class IntegratedFleetSimulator:
         """Нормальный год: счётчики уже разнесены по циклу, а не обнулены в один день.
 
         Иначе 43 состава одновременно подходят к IS100, а ночь физически
-        пропускает около 15 коротких работ. Допущение, не цитата заказчика:
+        пропускает около 15 коротких работ. Это допущение модели:
         в примере оборота пробеги уже разные.
         """
         # Разнос только внутри допуска IS100, ниже порога 85%.
@@ -196,7 +196,6 @@ class IntegratedFleetSimulator:
         st["cars"] = [base + i * 1_500.0 for i in range(len(st["cars"]))]
         st["m"]["wheelset_turning"] = max(st["cars"])
 
-    # ====================================================== главный цикл
     def _main(self):
         self._maybe_commission()
         if self.use_planning:
@@ -213,7 +212,6 @@ class IntegratedFleetSimulator:
 
             if self.env.now % 24 < 0.1:
                 if self.use_diagram:
-                    from src.simulation.diagram import rebalance_cities
                     rebalance_cities(self)
                 for job in self._plan_night():
                     self.env.process(self._job_process(job))
@@ -233,7 +231,6 @@ class IntegratedFleetSimulator:
                 }
                 self._segment(tid, st["status"])
 
-    # ------------------------------------------------------- планировщики
     def _refresh_strategic(self):
         if not self.strategic:
             return
@@ -258,8 +255,10 @@ class IntegratedFleetSimulator:
         logger.info("Стратегический план: {} событий", len(plan))
 
     def _refresh_tactical(self):
-        """CP-SAT на 14 суток. Исполняет те же ограничения, что и ночной диспетчер.
-        Если решатель не успел — диспетчер всё равно собирает ночь сам."""
+        """CP-SAT на 14 суток с теми же ограничениями, что и у ночного диспетчера.
+
+        Если решатель не успел, диспетчер всё равно собирает ночь сам.
+        """
         if not self.tactical:
             return
         self._sync_state_light()
@@ -270,7 +269,6 @@ class IntegratedFleetSimulator:
         except Exception as ex:
             logger.error("Тактический план: {}", ex)
 
-    # ------------------------------------------------------- ночь
     def _plan_night(self) -> List[Dict]:
         comm = self._commissioned_count()
         slack = service_slot_limit(comm)
@@ -425,7 +423,6 @@ class IntegratedFleetSimulator:
 
     def _candidate(self, tid: int) -> Optional[Dict]:
         st = self.state[tid]
-        threshold = 0.85 if self.use_planning else 1.0
         best = None
 
         for code, due in st["calendar_due"].items():
@@ -457,9 +454,6 @@ class IntegratedFleetSimulator:
             due = ratio >= need or past or stype in st["open_block"]
             if not due:
                 continue
-            if best and best["type"] in config.CALENDAR_TASKS and not past:
-                # Календарную работу приклеим к регламенту, если влезет.
-                pass
             urgency = ratio * config.SERVICE_CRITICALITY.get(stype, 1) + (12 if past else 0)
             if self._km_to_hard(tid) < config.PAIR_KM * 2:
                 urgency += 4
@@ -650,9 +644,6 @@ class IntegratedFleetSimulator:
             self.free_jacks.add(bay)
         elif resource == "bay" and bay is not None:
             self.free_bays.add(bay)
-        elif resource == "lathe":
-            # занятость станка для метрики — по факту только что закончившейся работы
-            pass
 
     def _turn_cars(self, tid, n):
         st = self.state[tid]
@@ -661,29 +652,23 @@ class IntegratedFleetSimulator:
             st["cars"][i] = 0.0
         st["m"]["wheelset_turning"] = max(st["cars"]) if st["cars"] else 0.0
 
-    # ------------------------------------------------------- день, оборот
     def _run_day(self):
         """Сутки. По умолчанию — оборот пары 1 358 км.
 
-        use_diagram включает нитки примера заказчика. На длинном горизонте
-        они пока хуже держат состав у допуска в Москве, поэтому годовой
-        прогон в интерфейсе идёт по проверенному контуру.
+        use_diagram включает нитки примера из материалов заказчика. На длинном
+        горизонте они хуже держат состав у допуска в Москве, поэтому годовой
+        прогон в интерфейсе идёт без них.
         """
         if self.use_diagram:
             yield from run_diagram_day(self)
             return
         yield from self._run_circulation()
 
-
     def _run_circulation(self):
         """Оборот пары 1 358 км. Резерв ротируется, а не сидит месяцами."""
         day_end = (self.env.now // 24) * 24 + 24
         comm = self._commissioned_count()
         need = required_count(comm)
-        slack = service_slot_limit(comm)
-        running = sum(1 for s in self.state.values()
-                      if s["busy"] and s["status"] in (MAINTENANCE, BROKEN, "waiting"))
-        free_slots = max(0, min(slack, config.MAX_ON_SERVICE) - running)
 
         spb = self._ready("spb")
         msk = self._ready("msk")
@@ -750,10 +735,6 @@ class IntegratedFleetSimulator:
 
         if self.env.now < day_end:
             yield self.env.timeout(day_end - self.env.now)
-
-    def _designate_reserve(self):
-        """Совместимость: резерв назначается внутри _run_day, с ротацией."""
-        return
 
     def _ready(self, city) -> List[int]:
         out = []
@@ -893,7 +874,6 @@ class IntegratedFleetSimulator:
                 heavy=False, cars=min(cars, 3))
         yield from self._job_process(job)
 
-    # ------------------------------------------------------- отказы
     def _roll_failure(self, tid, km) -> Optional[str]:
         p_line, p_unp = self._failure_probs(tid, km)
         u = self.rng.random()
@@ -945,7 +925,7 @@ class IntegratedFleetSimulator:
             "node": node["code"], "kind": kind, "place": place,
         })
         desc = f"{ru_node(node['code'])}. {'Отказ в пути' if kind == 'line' else 'Внеплановый заход'}."
-        # Чат: в Москве возможны внеплановые работы, включая замену КП. Плановые циклы — нет.
+        # В Москве возможны внеплановые работы, включая замену КП; плановые циклы — нет.
         if place == "msk" and self.moscow_repair_used < config.MOSCOW_UNPLANNED_CAPACITY:
             self.moscow_repair_used += 1
             dur = self.rng.uniform(config.MOSCOW_REPAIR_HOURS_MIN, config.MOSCOW_REPAIR_HOURS_MAX)
@@ -988,9 +968,7 @@ class IntegratedFleetSimulator:
         st["location"] = "spb"
         self._set_status(tid, OPERATIONAL)
 
-    # ------------------------------------------------------- пробег и пороги
     def _add_mileage(self, tid, km):
-        km *= self.scenario["mileage"] if False else 1.0
         # Пробег рейса фиксирован (679 км). Сценарий «высокая нагрузка»
         # добавляет рейсы, а не удлиняет перегон.
         st = self.state[tid]
@@ -1047,7 +1025,6 @@ class IntegratedFleetSimulator:
         # Средний рейс оборота: около 2 500 км на состав, который вышел на нитки.
         return config.PAIR_KM * 1.8
 
-    # ------------------------------------------------------- статусы, события
     def _set_status(self, tid, status, stype=None, bay=None, location=None):
         st = self.state[tid]
         if location:
@@ -1108,7 +1085,6 @@ class IntegratedFleetSimulator:
             dur = max(0.1, (self.env.now - (ev["actual_start"] - hour_to_datetime(0)).total_seconds() / 3600))
             self._close_event(ev, dur)
 
-    # ------------------------------------------------------- метрики
     def _collector(self):
         while True:
             self._sample()
@@ -1129,8 +1105,8 @@ class IntegratedFleetSimulator:
                          and s["commissioned_hour"] <= self.env.now)
         broken = sum(1 for s in self.state.values() if s["status"] == BROKEN)
         lathe_busy = sum(1 for t in self.lathe_busy_until if t > self.env.now)
-        # lathe_busy_until не всегда заполнен — считаем по сегментам статуса нет.
-        # Дополняем: если есть открытый сегмент обточки, станок занят.
+        # lathe_busy_until заполняется не всегда: открытый сегмент обточки
+        # тоже означает, что станок занят.
         if any(seg.get("service_type") == "wheelset_turning"
                for seg in self._open_segments.values()):
             lathe_busy = max(lathe_busy, 1)
@@ -1212,7 +1188,6 @@ class IntegratedFleetSimulator:
                 bay=seg.get("bay")))
         self.session.commit()
 
-    # ------------------------------------------------------- результаты
     def get_results(self) -> Dict:
         m = self.metrics
         hourly = self.hourly or [(0, 1, 0, 0, 0, 0, 0)]

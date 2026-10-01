@@ -1,15 +1,13 @@
 """Тактическое планирование (горизонт 14 дней).
 
 Строит ночное расписание коротких работ (IS100, IS200, обточка колёсных пар)
-на единой шкале времени симуляции. Исправлено:
-- срочность (urgency) считается корректно (ранее всегда 0.0);
+на единой шкале времени симуляции:
 - «ночное окно» привязано к абсолютным часам суток, а не к смещению от now;
 - ограничение «не более N поездов на ТО одновременно» задано как cumulative
-  по всему горизонту (ранее проверялось раз в сутки и нарушалось);
-- позиции депо назначаются first-fit без пересечений (ранее все попадали в bay 1);
+  по всему горизонту;
+- позиции депо назначаются first-fit без пересечений;
 - длительные и текущие работы учитываются как фиксированные интервалы,
-  поэтому расписание не конфликтует со стратегическим уровнем;
-- расписание исполняется симулятором и закрывается (completed).
+  поэтому расписание не конфликтует со стратегическим уровнем.
 """
 from typing import Dict, List, Optional, Tuple
 
@@ -33,7 +31,6 @@ class TacticalPlanner:
         self.session = get_session(db_engine)
         self.horizon_hours = 14 * 24
 
-    # ------------------------------------------------------------------ API
     def create_weekly_schedule(
         self,
         now_hour: int,
@@ -63,7 +60,6 @@ class TacticalPlanner:
         self._save_schedule(schedule, now_hour)
         return schedule
 
-    # ------------------------------------------------------------- данные
     def _get_trains_needing_service(self, now_hour: int) -> List[Dict]:
         trains = self.session.query(Train).filter_by(status=OPERATIONAL).all()
         needing = []
@@ -84,12 +80,11 @@ class TacticalPlanner:
 
     def _calculate_urgency(self, train: Train, service_type: str) -> float:
         """Срочность: 1.0 = порог достигнут, >1 = просрочено."""
-        field = {s.lower(): f for s, f in
-                 {"IS100": "mileage_since_is100", "IS200": "mileage_since_is200",
-                  "IS510": "mileage_since_is510", "IS520": "mileage_since_is520",
-                  "IS530": "mileage_since_is530", "IS540": "mileage_since_is540",
-                  "IS600": "mileage_since_is600",
-                  "WHEELSET_TURNING": "mileage_since_wheelset"}.items()}
+        field = {"is100": "mileage_since_is100", "is200": "mileage_since_is200",
+                 "is510": "mileage_since_is510", "is520": "mileage_since_is520",
+                 "is530": "mileage_since_is530", "is540": "mileage_since_is540",
+                 "is600": "mileage_since_is600",
+                 "wheelset_turning": "mileage_since_wheelset"}
         mileage_field = field.get(service_type.lower())
         if mileage_field is None:
             return 0.0
@@ -99,7 +94,6 @@ class TacticalPlanner:
             return 0.0
         return (current / trigger) * config.SERVICE_CRITICALITY.get(service_type, 1.0)
 
-    # ------------------------------------------------------------- CP-SAT
     def _duration(self, service_type: str) -> int:
         base = config.SERVICE_DURATIONS[service_type]
         return max(1, int(round(base * (1 + config.UNPLANNED_OVERHEAD[service_type]))))
@@ -132,7 +126,6 @@ class TacticalPlanner:
                 model.NewFixedSizeIntervalVar(fs, fe - fs, f"fixed_{i}"))
 
         all_intervals = list(interval_v.values()) + fixed_intervals
-        n_fixed = len(fixed_intervals)
 
         # Готовность и депо: одновременно на ТО не более (TOTAL - REQUIRED).
         # Это строже вместимости депо (5 < 8), поэтому first-fit по позициям
@@ -194,7 +187,6 @@ class TacticalPlanner:
                 hours=row["duration_hours"]), row["service_type"],
                 int(row["train_id"]), int(bay or 1)))
 
-    # ------------------------------------------------------------- greedy
     def _greedy_schedule(self, trains: List[Dict], now_hour: int) -> pd.DataFrame:
         depot = DepotState()
         wheel_slots: List[Tuple[int, int]] = []
@@ -234,7 +226,6 @@ class TacticalPlanner:
                                t["service_type"])
         return pd.DataFrame(rows)
 
-    # ------------------------------------------------------------- запись
     def _save_schedule(self, df: pd.DataFrame, now_hour: int):
         horizon_end = now_hour + self.horizon_hours
         (self.session.query(MaintenanceEvent)

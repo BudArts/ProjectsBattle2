@@ -1,12 +1,4 @@
-"""Модель данных и работа с БД (SQLite для прототипа).
-
-Изменения относительно прежней версии:
-- init_db() сам создаёт каталог под файл БД (раньше падал без data/);
-- у MaintenanceEvent появилось work_description (описание внепланового ремонта);
-- добавлен статус 'not_delivered' для ещё не поставленных поездов;
-- добавлена таблица ServiceSegment для истории статусов (гантт, аналитика);
-- reset_service_mileage() использует SERVICE_HIERARCHY из конфига (без дублей).
-"""
+"""Модель данных и работа с БД (SQLite)."""
 import os
 from datetime import datetime, timedelta
 
@@ -92,7 +84,7 @@ class Schedule(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
     valid_from = Column(DateTime)
     valid_to = Column(DateTime)
-    schedule_data = Column(JSON if False else __import__('sqlalchemy').JSON)
+    schedule_data = Column(JSON)
     active = Column(Boolean, default=True)
 
 
@@ -199,7 +191,7 @@ MILEAGE_FIELDS = {
 
 
 def reset_service_mileage(train: Train, service_type: str, at: datetime = None):
-    """Сбросить счётчики пробега с учётом иерархии (единая точка правды)."""
+    """Сбросить счётчики пробега с учётом иерархии работ (SERVICE_HIERARCHY)."""
     for level in config.SERVICE_HIERARCHY.get(service_type, [service_type]):
         field = MILEAGE_FIELDS.get(level)
         if field:

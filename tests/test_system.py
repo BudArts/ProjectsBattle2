@@ -1,18 +1,17 @@
-"""Юнит/интеграционные тесты ключевых исправлений (pytest).
+"""Юнит- и интеграционные тесты (pytest).
 
 Запуск:  python -m pytest tests/ -q
 """
-import os
-from datetime import datetime
+from datetime import datetime, timedelta
 
 import pytest
 
-from src.core.config import config
-from src.core.database import (Train, get_session, init_db,
+from src.core.database import (MaintenanceEvent, Train, get_session, init_db,
                                reset_service_mileage, seed_initial_data)
-from src.core.entities import MaintenanceSlot, DepotState
+from src.core.entities import MaintenanceSlot
 from src.planning.strategic import StrategicPlanner
 from src.planning.tactical import TacticalPlanner
+from src.simulation.simulator import IntegratedFleetSimulator
 
 
 def make_train(session, i, **m):
@@ -84,24 +83,21 @@ def test_tactical_night_window_and_limits(session):
     # ночное окно: час начала 0..5
     assert all(int(s) % 24 in (0, 1, 2, 3, 4, 5) for s in df.start_hour)
     # нет пересечений по позициям депо
-    depot = DepotState()
     base = datetime(2028, 4, 1)
     slots = []
     for _, r in df.iterrows():
-        s = base + __import__("datetime").timedelta(hours=int(r.start_hour))
-        slots.append(MaintenanceSlot(s, s + __import__("datetime").timedelta(
-            hours=r.duration_hours), r.service_type, int(r.train_id),
-            int(r.depot_bay)))
+        s = base + timedelta(hours=int(r.start_hour))
+        slots.append(MaintenanceSlot(s, s + timedelta(hours=r.duration_hours),
+                                     r.service_type, int(r.train_id),
+                                     int(r.depot_bay)))
     for a in slots:
         for b in slots:
             if a is not b:
                 assert not a.overlaps(b)
 
 
-def test_simulation_executes_and_closes_events():
-    from src.simulation.simulator import IntegratedFleetSimulator
-    from src.core.database import MaintenanceEvent
-    engine = init_db("sqlite:///data/test_sys.db")
+def test_simulation_executes_and_closes_events(tmp_path):
+    engine = init_db(f"sqlite:///{tmp_path}/sim.db")
     session = get_session(engine)
     seed_initial_data(session, 43, reset=True)
     sim = IntegratedFleetSimulator(engine, 43, use_planning=True)
@@ -116,4 +112,3 @@ def test_simulation_executes_and_closes_events():
     # ML-выборка сбалансирована
     ml = sim.get_ml_data()
     assert ml["failure"].sum() > 0 and (ml["failure"] == 0).sum() > 0
-    os.remove("data/test_sys.db")
