@@ -1,0 +1,41 @@
+# Обратный прокси для панели (Streamlit слушает 127.0.0.1:8501).
+# Установка: скопировать в /etc/nginx/conf.d/hsr.conf (или в sites-available
+# с символической ссылкой в sites-enabled), заменить server_name,
+# проверить `nginx -t` и перечитать конфигурацию `systemctl reload nginx`.
+# HTTPS: `certbot --nginx -d hsr.example.com` сам допишет TLS и редирект.
+
+map $http_upgrade $connection_upgrade {
+    default upgrade;
+    ''      close;
+}
+
+server {
+    listen 80;
+    listen [::]:80;
+    server_name hsr.example.com;
+
+    # Доступ по паролю (файл создаётся командой htpasswd, см. docs/DEPLOY.md):
+    # auth_basic           "HSR";
+    # auth_basic_user_file /etc/nginx/hsr.htpasswd;
+
+    location / {
+        proxy_pass http://127.0.0.1:8501;
+        proxy_http_version 1.1;
+
+        # Streamlit сверяет Origin WebSocket с Host вместе с портом,
+        # поэтому Host передаётся ровно в том виде, в каком его прислал браузер.
+        proxy_set_header Host              $http_host;
+        proxy_set_header X-Real-IP         $remote_addr;
+        proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+
+        # Интерфейс Streamlit работает через WebSocket (/_stcore/stream).
+        proxy_set_header Upgrade    $http_upgrade;
+        proxy_set_header Connection $connection_upgrade;
+
+        # Расчёты на вкладке «Симуляция» идут минутами; соединение не должно рваться.
+        proxy_read_timeout 3600s;
+        proxy_send_timeout 3600s;
+        proxy_buffering off;
+    }
+}

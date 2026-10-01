@@ -1,0 +1,35 @@
+# Запуск без Docker. Установка:
+#   sudo useradd --system --no-create-home --shell /usr/sbin/nologin hsr
+#   sudo cp deploy/hsr-dashboard.service /etc/systemd/system/
+#   sudo systemctl daemon-reload && sudo systemctl enable --now hsr-dashboard
+# Код ожидается в /opt/hsr, виртуальное окружение — в /opt/hsr/.venv.
+
+[Unit]
+Description=HSR: панель эксплуатационной готовности (Streamlit)
+After=network.target
+
+[Service]
+Type=simple
+User=hsr
+Group=hsr
+WorkingDirectory=/opt/hsr
+Environment=PYTHONPATH=/opt/hsr
+Environment=PYTHONUNBUFFERED=1
+Environment=PYTHONDONTWRITEBYTECODE=1
+Environment=HOME=/var/lib/hsr
+Environment=HSR_DB_URL=sqlite:////var/lib/hsr/hsr.db
+ExecStart=/opt/hsr/.venv/bin/python -m streamlit run src/dashboard/app.py --server.address 127.0.0.1 --server.port 8501
+Restart=on-failure
+RestartSec=5
+StateDirectory=hsr
+
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+
+[Install]
+WantedBy=multi-user.target

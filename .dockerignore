@@ -1,0 +1,31 @@
+.git
+.gitignore
+.dockerignore
+Dockerfile
+docker-compose.yml
+.env
+.env.*
+.venv
+venv
+**/__pycache__
+**/*.py[cod]
+.pytest_cache
+.ruff_cache
+.mypy_cache
+.idea
+.vscode
+
+# не нужно во время работы приложения
+tests
+docs
+deploy
+README.md
+pytest.ini
+requirements-dev.txt
+test_run.py
+*.pdf
+data/*.xlsx
+
+# базы данных создаются в томе /app/storage
+**/*.db
+**/*.db-*

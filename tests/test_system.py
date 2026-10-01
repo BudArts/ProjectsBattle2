@@ -40,6 +40,13 @@ def test_init_db_creates_directory(tmp_path):
     assert target.exists()
 
 
+def test_init_db_uses_url_from_environment(tmp_path, monkeypatch):
+    target = tmp_path / "from_env" / "hsr.db"
+    monkeypatch.setenv("HSR_DB_URL", f"sqlite:///{target}")
+    init_db()
+    assert target.exists()
+
+
 def test_hierarchy_reset(session):
     t = make_train(session, 1, mileage_since_is100=9000, mileage_since_is200=20000,
                    mileage_since_is540=500000, mileage_since_is600=900000)

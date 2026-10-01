@@ -1,12 +1,20 @@
-"""Модель данных и работа с БД (SQLite)."""
+"""Модель данных и работа с БД (по умолчанию SQLite).
+
+Адрес БД задаётся переменной окружения HSR_DB_URL; без неё используется
+файл data/hsr.db в корне проекта.
+"""
 import os
 from datetime import datetime, timedelta
+from pathlib import Path
 
 from sqlalchemy import (Boolean, Column, DateTime, Float, ForeignKey, Integer,
                         JSON, String, create_engine, inspect, text)
 from sqlalchemy.orm import declarative_base, relationship, sessionmaker
 
 from .config import config
+
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+DEFAULT_DB_URL = f"sqlite:///{PROJECT_ROOT / 'data' / 'hsr.db'}"
 
 Base = declarative_base()
 
@@ -88,8 +96,14 @@ class Schedule(Base):
     active = Column(Boolean, default=True)
 
 
-def init_db(db_url='sqlite:///data/hsr.db'):
+def get_db_url() -> str:
+    """Адрес БД: HSR_DB_URL или файл data/hsr.db в корне проекта."""
+    return os.environ.get("HSR_DB_URL") or DEFAULT_DB_URL
+
+
+def init_db(db_url=None):
     """Создать движок БД, при необходимости создав каталог под файл."""
+    db_url = db_url or get_db_url()
     connect_args = {}
     if db_url.startswith('sqlite:///') and db_url != 'sqlite:///:memory:':
         path = db_url[len('sqlite:///'):]
