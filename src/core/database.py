@@ -1,20 +1,20 @@
-"""Модель данных и работа с БД (SQLite для прототипа).
+"""Модель данных и работа с БД (по умолчанию SQLite).
 
-Изменения относительно прежней версии:
-- init_db() сам создаёт каталог под файл БД (раньше падал без data/);
-- у MaintenanceEvent появилось work_description (описание внепланового ремонта);
-- добавлен статус 'not_delivered' для ещё не поставленных поездов;
-- добавлена таблица ServiceSegment для истории статусов (гантт, аналитика);
-- reset_service_mileage() использует SERVICE_HIERARCHY из конфига (без дублей).
+Адрес БД задаётся переменной окружения HSR_DB_URL; без неё используется
+файл data/hsr.db в корне проекта.
 """
 import os
 from datetime import datetime, timedelta
+from pathlib import Path
 
 from sqlalchemy import (Boolean, Column, DateTime, Float, ForeignKey, Integer,
                         JSON, String, create_engine, inspect, text)
 from sqlalchemy.orm import declarative_base, relationship, sessionmaker
 
 from .config import config
+
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+DEFAULT_DB_URL = f"sqlite:///{PROJECT_ROOT / 'data' / 'hsr.db'}"
 
 Base = declarative_base()
 
@@ -92,12 +92,18 @@ class Schedule(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
     valid_from = Column(DateTime)
     valid_to = Column(DateTime)
-    schedule_data = Column(JSON if False else __import__('sqlalchemy').JSON)
+    schedule_data = Column(JSON)
     active = Column(Boolean, default=True)
 
 
-def init_db(db_url='sqlite:///data/hsr.db'):
+def get_db_url() -> str:
+    """Адрес БД: HSR_DB_URL или файл data/hsr.db в корне проекта."""
+    return os.environ.get("HSR_DB_URL") or DEFAULT_DB_URL
+
+
+def init_db(db_url=None):
     """Создать движок БД, при необходимости создав каталог под файл."""
+    db_url = db_url or get_db_url()
     connect_args = {}
     if db_url.startswith('sqlite:///') and db_url != 'sqlite:///:memory:':
         path = db_url[len('sqlite:///'):]
@@ -199,7 +205,7 @@ MILEAGE_FIELDS = {
 
 
 def reset_service_mileage(train: Train, service_type: str, at: datetime = None):
-    """Сбросить счётчики пробега с учётом иерархии (единая точка правды)."""
+    """Сбросить счётчики пробега с учётом иерархии работ (SERVICE_HIERARCHY)."""
     for level in config.SERVICE_HIERARCHY.get(service_type, [service_type]):
         field = MILEAGE_FIELDS.get(level)
         if field:

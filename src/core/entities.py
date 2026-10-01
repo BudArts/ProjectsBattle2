@@ -1,8 +1,4 @@
-"""Доменные сущности: состояние поезда, состояние депо.
-
-Исправлено: TrainState собирается по всем 8 счётчикам пробега
-(ранее диспетчер видел только 4 и «не замечал» IS520–IS700).
-"""
+"""Доменные сущности: состояние поезда, состояние депо."""
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional
@@ -42,7 +38,10 @@ class TrainState:
 
     def services_due(self, urgency_threshold: float = 0.9,
                      only: Optional[tuple] = None) -> List[str]:
-        """Типы работ, у которых пробег достиг порога (в %)."""
+        """Типы работ, у которых пробег достиг доли urgency_threshold от порога.
+
+        Порядок — по убыванию срочности (доля порога × критичность).
+        """
         due = []
         types = only if only is not None else config.MILEAGE_TRIGGERS.keys()
         for service_type in types:

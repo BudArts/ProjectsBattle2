@@ -1,6 +1,7 @@
 """Точка входа.
 
-  python main.py            — веб-интерфейс (Streamlit)
+  python main.py            — веб-интерфейс (Streamlit), то же что `main.py web`
+  python main.py web --host 127.0.0.1 --port 8501
   python main.py sim        — прогон симуляции из командной строки
   python main.py seed       — создать/пересоздать парк в БД
 
@@ -82,6 +83,8 @@ def main():
     sub.add_parser("seed", help="пересоздать парк")
 
     args = p.parse_args()
+    if args.cmd is None:
+        args = p.parse_args(["web"])
     if args.cmd == "sim":
         run_sim(args)
     elif args.cmd == "seed":

@@ -9,10 +9,14 @@ font = "sans serif"
 [server]
 headless = true
 address = "0.0.0.0"
-enableCORS = false
-enableXsrfProtection = false
-runOnSave = true
-fileWatcherType = "poll"
+port = 8501
+enableCORS = true
+enableXsrfProtection = true
+runOnSave = false
+fileWatcherType = "none"
 
 [browser]
 gatherUsageStats = false
+
+[client]
+showErrorDetails = "type"

@@ -1,7 +1,6 @@
 """График оборота из примера заказчика должен сходиться сам с собой."""
 from src.core.timetable import (EXAMPLE_SERVICE_IDS, OPERATING_DUTIES,
-                                diagram_summary, home_city, revenue_legs,
-                                timetable_rows)
+                                diagram_summary, home_city, timetable_rows)
 
 
 def test_diagram_covers_the_whole_fleet():

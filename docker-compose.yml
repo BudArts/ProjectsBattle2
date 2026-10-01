@@ -1,0 +1,21 @@
+services:
+  dashboard:
+    build: .
+    image: hsr-dashboard
+    init: true
+    restart: unless-stopped
+    ports:
+      - "${HSR_BIND:-127.0.0.1}:${HSR_PORT:-8501}:8501"
+    # Опции Streamlit и адрес базы (HSR_DB_URL) можно переопределить здесь:
+    # environment:
+    #   STREAMLIT_SERVER_ALLOWED_HOSTS: hsr.example.com
+    volumes:
+      - hsr-storage:/app/storage
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  hsr-storage:
